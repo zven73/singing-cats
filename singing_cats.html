@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neural Cat Orchestra (Hybrid Mode)</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        h1 { text-shadow: 0 0 10px #e94560; margin-bottom: 5px; text-align: center; }
+        
+        .status { 
+            margin-bottom: 20px; 
+            color: #888; 
+            font-size: 0.9rem; 
+            text-align: center;
+            height: 40px; /* фикс. высота чтобы не прыгало */
+        }
+
+        .mode-indicator {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .mode-mic { background: #1e5f23; color: #4caf50; border: 1px solid #4caf50; }
+        .mode-mouse { background: #7a4b05; color: #ffcc00; border: 1px solid #ffcc00; }
+
+        .stage {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .cat-card {
+            background: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            transition: transform 0.1s;
+        }
+
+        .cat-emoji { font-size: 3.5rem; display: block; margin-bottom: 5px; }
+        .cat-role { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #e94560; }
+
+        .playing {
+            border-color: #e94560;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.6);
+            transform: scale(1.05);
+            background: #2a2a55;
+        }
+
+        #start-btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(233, 69, 96, 0.4);
+            z-index: 100;
+        }
+        #start-btn:hover { background: #ff2e63; }
+
+        #level-container { width: 60%; height: 6px; background: #333; margin-top: 25px; border-radius: 5px; overflow: hidden; }
+        #level-bar { height: 100%; width: 0%; background: #4caf50; transition: width 0.05s; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body>
+
+    <h1>NEURAL CAT ORCHESTRA</h1>
+    
+    <div id="mode-badge" class="mode-indicator"></div>
+    <div class="status" id="status-text">Нажми кнопку для старта</div>
+
+    <div class="stage">
+        <div class="cat-card" id="cat-drums">
+            <span class="cat-emoji">😼</span><div class="cat-role">Rhythm</div>
+        </div>
+        <div class="cat-card" id="cat-bass">
+            <span class="cat-emoji">😽</span><div class="cat-role">Bass</div>
+        </div>
+        <div class="cat-card" id="cat-chords">
+            <span class="cat-emoji">🙀</span><div class="cat-role">Harmony</div>
+        </div>
+        <div class="cat-card" id="cat-lead">
+            <span class="cat-emoji">😎</span><div class="cat-role">Solo</div>
+        </div>
+    </div>
+
+    <div id="level-container"><div id="level-bar"></div></div>
+    <button id="start-btn">▶ ЗАПУСТИТЬ</button>
+
+    <script>
+        // Глобальные настройки
+        let isStarted = false;
+        let inputMode = 'none'; // 'mic' или 'mouse'
+        let mouseVelocity = 0;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        
+        // Tone.js объекты
+        let mic, meter;
+        let drumSynth, bassSynth, polySynth, leadSynth;
+        
+        const scale = ["C3", "Eb3", "F3", "G3", "Bb3", "C4"]; 
+        const bassScale = ["C2", "Eb2", "F2", "G2"];
+
+        const els = {
+            btn: document.getElementById('start-btn'),
+            status: document.getElementById('status-text'),
+            bar: document.getElementById('level-bar'),
+            badge: document.getElementById('mode-badge'),
+            cats: {
+                drums: document.getElementById('cat-drums'),
+                bass: document.getElementById('cat-bass'),
+                chords: document.getElementById('cat-chords'),
+                lead: document.getElementById('cat-lead')
+            }
+        };
+
+        // --- ЗАПУСК ---
+        async function initSystem() {
+            els.btn.innerText = "ИНИЦИАЛИЗАЦИЯ...";
+            
+            try {
+                await Tone.start();
+                createSynths(); // Создаем инструменты сразу
+
+                // Попытка подключить МИКРОФОН
+                try {
+                    mic = new Tone.UserMedia();
+                    meter = new Tone.Meter();
+                    mic.connect(meter);
+                    
+                    // Эта строчка упадет, если открыто через file://
+                    await mic.open(); 
+                    
+                    // Если мы здесь - микрофон работает
+                    inputMode = 'mic';
+                    showMode("🎤 Режим: Микрофон", "mode-mic");
+                    els.status.innerText = "Говори, пой или хлопай!";
+
+                } catch (micError) {
+                    // Если микрофон упал (из-за file:// или запрета)
+                    console.warn("Микрофон недоступен, включаем режим мыши", micError);
+                    inputMode = 'mouse';
+                    showMode("🖱️ Режим: Мышь (файл)", "mode-mouse");
+                    els.status.innerText = "Двигай мышкой быстро, чтобы играть!";
+                    
+                    // Запускаем трекер мыши
+                    setupMouseTracking();
+                }
+
+                // Запускаем главный цикл музыки
+                Tone.Transport.bpm.value = 110;
+                new Tone.Loop(perform, "8n").start(0);
+                Tone.Transport.start();
+
+                // Финал UI
+                els.btn.style.display = 'none';
+                isStarted = true;
+                requestAnimationFrame(visualLoop);
+
+            } catch (e) {
+                alert("Критическая ошибка аудио: " + e);
+            }
+        }
+
+        function createSynths() {
+            drumSynth = new Tone.MembraneSynth().toDestination();
+            bassSynth = new Tone.MonoSynth({ volume: -5, oscillator: { type: "square" } }).toDestination();
+            polySynth = new Tone.PolySynth(Tone.Synth, { volume: -10, oscillator: { type: "triangle" } }).toDestination();
+            leadSynth = new Tone.Synth({ volume: -8, oscillator: { type: "sawtooth" } }).toDestination();
+        }
+
+        function setupMouseTracking() {
+            document.addEventListener('mousemove', (e) => {
+                // Вычисляем скорость движения мыши
+                const dist = Math.hypot(e.clientX - lastMouseX, e.clientY - lastMouseY);
+                mouseVelocity = Math.min(1, dist / 50); // Нормализуем 0..1
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            });
+            
+            // Снижаем скорость, если мышь остановилась
+            setInterval(() => {
+                mouseVelocity *= 0.8; 
+                if(mouseVelocity < 0.01) mouseVelocity = 0;
+            }, 50);
+        }
+
+        // --- ГЛАВНЫЙ МОЗГ (LOOP) ---
+        function perform(time) {
+            if(!isStarted) return;
+
+            // Определяем уровень "Энергии" (Громкость или Скорость мыши)
+            let level = 0;
+
+            if (inputMode === 'mic') {
+                const db = meter.getValue();
+                level = Math.max(0, (db + 50) / 50); // Нормализация -50db..0db -> 0..1
+            } else {
+                level = mouseVelocity; // В режиме мыши используем скорость
+            }
+
+            const isActive = level > 0.2; // Хоть какая-то активность
+            const isLoud = level > 0.6;   // Сильная активность
+
+            // Логика котов (одинаковая для обоих режимов)
+            
+            // 1. РИТМ (Всегда пытается играть, если есть активность)
+            if (isActive && Math.random() > 0.3) {
+                drumSynth.triggerAttackRelease("C1", "8n", time);
+                animCat('drums');
+            }
+
+            // 2. БАС (Если чуть активнее)
+            if (isActive && Math.random() > 0.4) {
+                const note = bassScale[Math.floor(Math.random() * bassScale.length)];
+                bassSynth.triggerAttackRelease(note, "16n", time);
+                animCat('bass');
+            }
+
+            // 3. АККОРДЫ (Случайные всплески)
+            if (Math.random() > 0.8) {
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                polySynth.triggerAttackRelease([note], "4n", time);
+                animCat('chords');
+            }
+
+            // 4. СОЛО (Только когда громко/быстро)
+            if (isLoud && Math.random() > 0.4) {
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                const highNote = Tone.Frequency(note).transpose(24);
+                leadSynth.triggerAttackRelease(highNote, "32n", time);
+                animCat('lead');
+            }
+        }
+
+        // UI и Анимации
+        function animCat(role) {
+            Tone.Draw.schedule(() => {
+                const el = els.cats[role];
+                el.classList.add('playing');
+                setTimeout(() => el.classList.remove('playing'), 100);
+            }, Tone.now());
+        }
+
+        function visualLoop() {
+            if (!isStarted) return;
+            
+            let displayLevel = 0;
+            if (inputMode === 'mic') {
+                const db = meter.getValue();
+                displayLevel = Math.max(0, (db + 50) / 50) * 100;
+            } else {
+                displayLevel = mouseVelocity * 100;
+            }
+            
+            els.bar.style.width = Math.min(displayLevel, 100) + '%';
+            els.bar.style.backgroundColor = inputMode === 'mic' ? '#4caf50' : '#ffcc00';
+            
+            requestAnimationFrame(visualLoop);
+        }
+
+        function showMode(text, className) {
+            els.badge.innerText = text;
+            els.badge.className = 'mode-indicator ' + className;
+            els.badge.style.display = 'block';
+        }
+
+        els.btn.addEventListener('click', initSystem);
+
+    </script>
+</body>
+</html>
