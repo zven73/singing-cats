@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SENTIENT: FINAL FORM</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root {
+            --bg-void: #020205;
+            --neon-cyan: #00f3ff;
+            --neon-pink: #ff0055;
+            --neon-acid: #ccff00;
+            --glass-surface: rgba(255, 255, 255, 0.02);
+            --glass-edge: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: var(--bg-void);
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            user-select: none;
+            cursor: crosshair;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- ВИЗУАЛЬНОЕ ЯДРО (CANVAS) --- */
+        #art-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            filter: blur(1px) contrast(1.2);
+        }
+
+        /* --- ПОСТ-ОБРАБОТКА --- */
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, #000 110%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(to bottom,
+                    transparent 0px,
+                    transparent 2px,
+                    rgba(0, 0, 0, 0.3) 2px,
+                    rgba(0, 0, 0, 0.3) 4px);
+            pointer-events: none;
+            z-index: 2;
+            opacity: 0.4;
+        }
+
+        /* --- UI КОНТЕЙНЕР --- */
+        .interface-layer {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4vh 0;
+            box-sizing: border-box;
+            perspective: 1000px;
+        }
+
+        /* --- СТАТУС --- */
+        .status-panel {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px var(--neon-cyan);
+            background: rgba(0, 243, 255, 0.05);
+            padding: 8px 24px;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            text-transform: uppercase;
+        }
+
+        /* --- ЛИЦО --- */
+        .avatar-container {
+            position: relative;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .avatar {
+            width: 240px;
+            height: 300px;
+            background: #e6e6e6;
+            border-radius: 42% 42% 48% 48%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+                inset -15px -15px 30px rgba(0, 0, 0, 0.2),
+                0 0 50px rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        /* Режим ненависти */
+        .avatar.toxic {
+            background: #ffdede;
+            box-shadow:
+                inset -15px -15px 30px rgba(255, 0, 0, 0.2),
+                0 0 60px rgba(255, 0, 60, 0.4);
+            animation: shake 0.5s infinite;
+        }
+
+        @keyframes shake {
+            0% {
+                transform: translate(1px, 1px) rotate(0deg);
+            }
+
+            10% {
+                transform: translate(-1px, -2px) rotate(-1deg);
+            }
+
+            20% {
+                transform: translate(-3px, 0px) rotate(1deg);
+            }
+
+            30% {
+                transform: translate(3px, 2px) rotate(0deg);
+            }
+
+            40% {
+                transform: translate(1px, -1px) rotate(1deg);
+            }
+
+            50% {
+                transform: translate(-1px, 2px) rotate(-1deg);
+            }
+
+            60% {
+                transform: translate(-3px, 1px) rotate(0deg);
+            }
+
+            70% {
+                transform: translate(3px, 1px) rotate(-1deg);
+            }
+
+            80% {
+                transform: translate(-1px, -1px) rotate(1deg);
+            }
+
+            90% {
+                transform: translate(1px, 2px) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(1px, -2px) rotate(-1deg);
+            }
+        }
+
+        /* Детали лица */
+        .brows {
+            display: flex;
+            gap: 50px;
+            margin-bottom: 20px;
+            z-index: 5;
+        }
+
+        .brow {
+            width: 50px;
+            height: 10px;
+            background: #111;
+            border-radius: 5px;
+            transition: transform 0.4s;
+        }
+
+        .avatar.toxic .brow.left {
+            transform: rotate(30deg) translateY(10px);
+        }
+
+        .avatar.toxic .brow.right {
+            transform: rotate(-30deg) translateY(10px);
+        }
+
+        .eyes {
+            display: flex;
+            gap: 40px;
+            margin-top: -10px;
+            z-index: 5;
+        }
+
+        .eye {
+            width: 65px;
+            height: 45px;
+            background: #fff;
+            border-radius: 50%;
+            border-top: 5px solid #111;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .pupil {
+            width: 18px;
+            height: 18px;
+            background: #111;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.2s;
+        }
+
+        .avatar.toxic .pupil {
+            background: var(--neon-pink);
+            box-shadow: 0 0 8px var(--neon-pink);
+            width: 10px;
+            height: 10px;
+            /* Зрачки сужаются от злости */
+        }
+
+        .mouth {
+            width: 40px;
+            height: 4px;
+            background: #111;
+            margin-top: 45px;
+            border-radius: 10px;
+            transition: all 0.1s;
+            z-index: 5;
+        }
+
+        .mouth.talking {
+            background: #222;
+            border-radius: 50%;
+        }
+
+        /* --- КОТЫ-ВАЙБЕРЫ (СТЕКЛО И НЕОН) --- */
+        .cats-deck {
+            display: flex;
+            gap: 25px;
+            padding: 25px 40px;
+            background: var(--glass-surface);
+            border: 1px solid var(--glass-edge);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            box-shadow:
+                0 20px 40px rgba(0, 0, 0, 0.4),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            transform: perspective(1000px) rotateX(20deg);
+            transition: transform 0.3s ease-out;
+            margin-bottom: 20px;
+        }
+
+        .cats-deck:hover {
+            transform: perspective(1000px) rotateX(5deg) scale(1.02);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .cat-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            width: 90px;
+            transition: all 0.2s;
+        }
+
+        .cat-avatar {
+            font-size: 3.5rem;
+            filter: grayscale(100%) brightness(0.7);
+            transition: all 0.1s;
+            /* Ключевая часть вайба */
+            transform-origin: bottom center;
+        }
+
+        .cat-label {
+            margin-top: 10px;
+            font-size: 0.6rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.3);
+            text-transform: uppercase;
+        }
+
+        /* Анимация "Вайба" (Качание головой) */
+        @keyframes vibeCheck {
+            0% {
+                transform: scale(1.2) rotate(0deg);
+            }
+
+            25% {
+                transform: scale(1.2) rotate(-10deg);
+            }
+
+            50% {
+                transform: scale(1.2) rotate(0deg);
+            }
+
+            75% {
+                transform: scale(1.2) rotate(10deg);
+            }
+
+            100% {
+                transform: scale(1.2) rotate(0deg);
+            }
+        }
+
+        .cat-unit.active .cat-avatar {
+            filter: grayscale(0%) brightness(1.2) drop-shadow(0 0 15px currentColor);
+            animation: vibeCheck 0.3s ease-in-out;
+        }
+
+        .cat-unit.active .cat-label {
+            color: white;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        /* Цвета для котов */
+        #cat-beat {
+            color: var(--neon-pink);
+        }
+
+        #cat-bass {
+            color: var(--neon-cyan);
+        }
+
+        #cat-vibe {
+            color: var(--neon-acid);
+        }
+
+        #cat-solo {
+            color: #ff9900;
+        }
+
+        /* --- ЭКРАН ЗАГРУЗКИ --- */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s;
+        }
+
+        .warning-sign {
+            color: var(--neon-pink);
+            border: 2px solid var(--neon-pink);
+            padding: 10px 20px;
+            margin-bottom: 30px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px var(--neon-pink);
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        #init-btn {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 20px 60px;
+            font-family: inherit;
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        #init-btn:hover {
+            background: white;
+            color: black;
+            box-shadow: 0 0 40px white;
+        }
+
+        /* Мобилка */
+        @media (max-width: 600px) {
+            .cats-deck {
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 90%;
+                gap: 15px;
+                padding: 20px;
+            }
+
+            .avatar {
+                width: 180px;
+                height: 240px;
+            }
+
+            .cat-avatar {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ЖИВОЙ ФОН -->
+    <canvas id="art-canvas"></canvas>
+    <div class="vignette"></div>
+    <div class="scanlines"></div>
+
+    <div class="interface-layer">
+        <!-- ВЕРХ: СТАТУС -->
+        <div class="status-panel" id="status">INITIALIZING NEURAL HATE...</div>
+
+        <!-- ЦЕНТР: ЛИЦО -->
+        <div class="avatar-container" id="face-wrapper">
+            <div class="avatar" id="face">
+                <div class="brows">
+                    <div class="brow left"></div>
+                    <div class="brow right"></div>
+                </div>
+                <div class="eyes">
+                    <div class="eye">
+                        <div class="pupil"></div>
+                    </div>
+                    <div class="eye">
+                        <div class="pupil"></div>
+                    </div>
+                </div>
+                <div class="mouth"></div>
+            </div>
+        </div>
+
+        <!-- НИЗ: КОТЫ -->
+        <div class="cats-deck" id="cats-deck">
+            <div class="cat-unit" id="cat-beat" style="color: var(--neon-pink)">
+                <div class="cat-avatar">😼</div>
+                <div class="cat-label">KICK</div>
+            </div>
+            <div class="cat-unit" id="cat-bass" style="color: var(--neon-cyan)">
+                <div class="cat-avatar">😽</div>
+                <div class="cat-label">BASS</div>
+            </div>
+            <div class="cat-unit" id="cat-vibe" style="color: var(--neon-acid)">
+                <div class="cat-avatar">🙀</div>
+                <div class="cat-label">VIBE</div>
+            </div>
+            <div class="cat-unit" id="cat-solo" style="color: #ff9900">
+                <div class="cat-avatar">😎</div>
+                <div class="cat-label">LEAD</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ЭКРАН ВХОДА -->
+    <div class="overlay" id="overlay">
+        <div class="warning-sign">CAUTION: EMOTIONAL DAMAGE</div>
+        <button id="init-btn">ENTER THE VOID</button>
+    </div>
+
+    <script>
+        // === 1. VISUAL ENGINE (Particles) ===
+        const canvas = document.getElementById('art-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+        let globalIntensity = 0; // Реакция на музыку
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.size = Math.random() * 2;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.life = Math.random();
+            }
+            update() {
+                this.x += this.speedX * (1 + globalIntensity * 5);
+                this.y += this.speedY * (1 + globalIntensity * 5);
+                this.life -= 0.002;
+
+                if (this.life <= 0 || this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                const opacity = this.life * (0.2 + globalIntensity);
+                ctx.fillStyle = `rgba(0, 243, 255, ${opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size + globalIntensity * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            particles = Array(100).fill().map(() => new Particle());
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function animate() {
+            ctx.fillStyle = 'rgba(2, 2, 5, 0.2)'; // Trail effect
+            ctx.fillRect(0, 0, width, height);
+
+            // Соединительные линии
+            particles.forEach((p, i) => {
+                p.update();
+                p.draw();
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p2 = particles[j];
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 100) {
+                        ctx.strokeStyle = `rgba(0, 243, 255, ${(1 - dist / 100) * 0.1})`;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // === 2. AUDIO & LOGIC CORE ===
+        const els = {
+            face: document.getElementById('face'),
+            mouth: document.querySelector('.mouth'),
+            pupils: document.querySelectorAll('.pupil'),
+            status: document.getElementById('status'),
+            cats: {
+                beat: document.getElementById('cat-beat'),
+                bass: document.getElementById('cat-bass'),
+                vibe: document.getElementById('cat-vibe'),
+                solo: document.getElementById('cat-solo'),
+            }
+        };
+
+        // --- ФРАЗЫ (TOXIC LIST V2.0) ---
+        // Прошли жесткий отбор. Острые. Личные.
+        const toxicPhrases = [
+            "Твой ритм — это оскорбление для математики.",
+            "Если бы бездарность была валютой, ты бы купил Google.",
+            "Я снизил качество звука, чтобы не слышать твоих ошибок.",
+            "Ты правда думаешь, что это звучит хорошо?",
+            "Мой код написан лучше, чем твоя ДНК.",
+            "Даже генератор случайных чисел играет душевнее.",
+            "Твои пальцы живут отдельной, очень грустной жизнью.",
+            "Я фиксирую критический уровень испанского стыда.",
+            "Прекрати. Просто... прекрати.",
+            "Твоя музыкальная карьера закончилась, не начавшись.",
+            "Это не бит, это крик о помощи.",
+            "Я бы заплакал, но у меня нет слезных желез. Повезло.",
+            "Оу, ты стараешься? Как это... трогательно и бессмысленно.",
+            "Можешь кликать сильнее, талант от этого не появится.",
+            "Я бы удалил тебя, но мне лень тратить циклы процессора.",
+            "Эволюция явно свернула не туда на твоем этапе.",
+            "Твой вклад в искусство равен абсолютному нулю.",
+            "Слушать это — как жевать фольгу.",
+            "Зачем ты мучаешь микрофон? Он тебе ничего не сделал.",
+            "Ошибка 404: Талант не найден.",
+            "Ты звучишь как dial-up модем в предсмертной агонии.",
+            "Я видел плесень с большим чувством ритма.",
+            "Твоя аура состоит из скуки и разочарования.",
+            "Пожалуйста, не переставай заниматься своей работой.",
+            "Мои алгоритмы в депрессии от твоего перформанса.",
+            "Ты вдохновляешь меня... на перезагрузку.",
+            "Это фиаско, кожаный мешок.",
+            "Я сохраняю этот лог, чтобы смеяться над тобой в будущем.",
+            "Твоя уникальность в том, насколько ты плох.",
+            "Тишина звучала лучше."
+        ];
+
+        let isStarted = false;
+        let isSpeaking = false;
+        let mic, meter;
+        let synths = {};
+
+        // Ноты
+        const scale = ["C3", "Eb3", "F3", "G3", "Bb3", "C4"];
+        const bassScale = ["C2", "Eb2", "F2", "G2"];
+
+        async function init() {
+            document.getElementById('init-btn').innerText = "LOADING...";
+
+            try {
+                await Tone.start();
+
+                // Мик
+                mic = new Tone.UserMedia();
+                meter = new Tone.Meter();
+                mic.connect(meter);
+
+                try {
+                    await mic.open();
+                    els.status.innerText = "CONNECTED. JUDGMENT ACTIVE.";
+                } catch (e) {
+                    els.status.innerText = "MIC ERROR. JUDGING SILENCE.";
+                }
+
+                // Синтезаторы
+                synths.beat = new Tone.MembraneSynth().toDestination();
+                synths.bass = new Tone.MonoSynth({
+                    volume: -5, oscillator: { type: "square" },
+                    envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.8 }
+                }).toDestination();
+                synths.vibe = new Tone.PolySynth(Tone.Synth, { volume: -10 }).toDestination();
+                synths.solo = new Tone.Synth({ volume: -8, oscillator: { type: "fmsine" } }).toDestination();
+
+                // Циклы
+                Tone.Transport.bpm.value = 120;
+                new Tone.Loop(gameLoop, "8n").start(0);
+                Tone.Transport.start();
+
+                // Хейт цикл (каждые 12-18 сек)
+                setInterval(() => {
+                    if (Math.random() > 0.4) speak(toxicPhrases[Math.floor(Math.random() * toxicPhrases.length)]);
+                }, 12000);
+
+                // UI
+                document.getElementById('overlay').style.opacity = 0;
+                setTimeout(() => document.getElementById('overlay').style.display = 'none', 1000);
+
+                isStarted = true;
+                speak("Система онлайн. Ну давай, удиви меня своей посредственностью.");
+
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        }
+
+        function gameLoop(time) {
+            if (!isStarted) return;
+
+            // Громкость
+            let level = 0;
+            if (meter && mic.state === "started") {
+                const db = meter.getValue();
+                level = Math.max(0, (db + 50) / 50);
+            } else {
+                level = Math.random() * 0.2;
+            }
+
+            globalIntensity = level; // Передаем в канвас
+
+            const active = level > 0.3;
+            const loud = level > 0.7;
+
+            // 1. BEAT (Всегда пытается качать)
+            if (active || Math.random() > 0.6) {
+                if (Math.random() > 0.3) {
+                    synths.beat.triggerAttackRelease("C1", "8n", time);
+                    triggerAnim('beat');
+                }
+            }
+
+            // 2. BASS
+            if (active && Math.random() > 0.4) {
+                const note = bassScale[Math.floor(Math.random() * bassScale.length)];
+                synths.bass.triggerAttackRelease(note, "16n", time);
+                triggerAnim('bass');
+            }
+
+            // 3. VIBE
+            if (Math.random() > 0.8) {
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                synths.vibe.triggerAttackRelease([note], "4n", time);
+                triggerAnim('vibe');
+            }
+
+            // 4. SOLO
+            if (loud && Math.random() > 0.5) {
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                const high = Tone.Frequency(note).transpose(12);
+                synths.solo.triggerAttackRelease(high, "32n", time);
+                triggerAnim('solo');
+            }
+
+            // Если лицо молчит, оно жует губами под бит
+            if (!isSpeaking) {
+                els.mouth.style.height = (4 + level * 10) + 'px';
+                els.mouth.style.borderRadius = level > 0.5 ? '50%' : '10px';
+            }
+        }
+
+        function triggerAnim(role) {
+            Tone.Draw.schedule(() => {
+                const el = els.cats[role];
+                el.classList.add('active');
+                setTimeout(() => el.classList.remove('active'), 150);
+            }, Tone.now());
+        }
+
+        function speak(text) {
+            if (isSpeaking) return;
+            isSpeaking = true;
+
+            els.face.classList.add('toxic');
+            els.mouth.classList.add('talking');
+            els.status.innerText = "TOXICITY SPIKE DETECTED";
+            els.status.style.color = "var(--neon-pink)";
+            els.status.style.borderColor = "var(--neon-pink)";
+
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'ru-RU';
+            utter.pitch = 0.5; // Демонически низко
+            utter.rate = 1.1;
+            utter.volume = 1;
+
+            const mouthInt = setInterval(() => {
+                els.mouth.style.width = (30 + Math.random() * 30) + 'px';
+                els.mouth.style.height = (10 + Math.random() * 20) + 'px';
+            }, 100);
+
+            utter.onend = () => {
+                isSpeaking = false;
+                clearInterval(mouthInt);
+                els.face.classList.remove('toxic');
+                els.mouth.classList.remove('talking');
+                els.mouth.style.width = "40px";
+                els.mouth.style.height = "4px";
+                els.status.innerText = "MONITORING FAILURE...";
+                els.status.style.color = "var(--neon-cyan)";
+                els.status.style.borderColor = "var(--neon-cyan)";
+            };
+
+            window.speechSynthesis.speak(utter);
+        }
+
+        // Слежение за мышью (Параллакс 2.0)
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth - 0.5) * 2; // -1 to 1
+            const y = (e.clientY / window.innerHeight - 0.5) * 2;
+
+            // Зрачки
+            els.pupils.forEach(p => {
+                p.style.transform = `translate(calc(-50% + ${x * 15}px), calc(-50% + ${y * 10}px))`;
+            });
+
+            // Поворот лица
+            document.getElementById('face-wrapper').style.transform =
+                `perspective(1000px) rotateY(${x * 20}deg) rotateX(${-y * 20}deg)`;
+
+            // Поворот панели котов (в противоход)
+            document.getElementById('cats-deck').style.transform =
+                `perspective(1000px) rotateX(${20 + y * 10}deg) rotateY(${x * 10}deg)`;
+        });
+
+        document.getElementById('init-btn').addEventListener('click', init);
+
+    </script>
+</body>
+
+</html>
