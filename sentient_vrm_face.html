@@ -456,7 +456,9 @@
             vibeIntensity: 0,
             mouse: { x: 0, y: 0 },
             isMuted: false,
-            currentSpeaker: null // 'VRM' or 'FACE'
+            currentSpeaker: null, // 'VRM' or 'FACE'
+            inputMode: 'none',
+            mouseVelocity: 0
         };
 
         // === PHRASE DATABASES ===
@@ -664,7 +666,14 @@
 
         let mic, meter;
         let synths = {};
-        const scale = ["C3", "E3", "G3", "B3", "D4"];
+        const scale = ["C3", "Eb3", "F3", "G3", "Bb3", "C4"];
+        const bassScale = ["C2", "Eb2", "F2", "G2"];
+        const mouseTracker = { lastX: null, lastY: null };
+
+        setInterval(() => {
+            state.mouseVelocity *= 0.8;
+            if (state.mouseVelocity < 0.01) state.mouseVelocity = 0;
+        }, 50);
 
         async function checkOllama() {
             try {
@@ -783,23 +792,39 @@
         }
 
         // === 5. INIT & LOOP ===
+        function createSynths() {
+            synths.beat = new Tone.MembraneSynth().toDestination();
+            synths.bass = new Tone.MonoSynth({ volume: -5, oscillator: { type: "square" } }).toDestination();
+            synths.vibe = new Tone.PolySynth(Tone.Synth, { volume: -10, oscillator: { type: "triangle" } }).toDestination();
+            synths.solo = new Tone.Synth({ volume: -8, oscillator: { type: "sawtooth" } }).toDestination();
+        }
+
         async function initAudio() {
             document.getElementById('init-btn').innerText = "SYNCING...";
             checkOllama();
 
             await Tone.start();
+            createSynths();
             mic = new Tone.UserMedia();
             meter = new Tone.Meter();
             mic.connect(meter);
 
-            try { await mic.open(); } catch (e) { console.log("No Mic"); }
+            try {
+                await mic.open();
+                state.inputMode = 'mic';
+                els.status.innerText = ">> MIC CHANNEL ARMED <<";
+                els.status.style.color = "var(--neon-cyan)";
+                els.status.style.borderColor = "var(--neon-cyan)";
+            } catch (e) {
+                console.warn("Mic unavailable, switching to mouse", e);
+                state.inputMode = 'mouse';
+                els.status.innerText = ">> MOUSE ENERGY DRIVER <<";
+                els.status.style.color = "var(--neon-acid)";
+                els.status.style.borderColor = "var(--neon-acid)";
+            }
 
-            synths.beat = new Tone.MembraneSynth().toDestination();
-            synths.bass = new Tone.MonoSynth({ volume: -8, oscillator: { type: "square" } }).toDestination();
-            synths.vibe = new Tone.PolySynth(Tone.Synth, { volume: -12 }).toDestination();
-
-            Tone.Transport.bpm.value = 120;
-            new Tone.Loop(gameLoop, "8n").start(0);
+            Tone.Transport.bpm.value = 110;
+            new Tone.Loop(performAudio, "8n").start(0);
             Tone.Transport.start();
 
             setInterval(() => {
@@ -813,24 +838,47 @@
             speak("Система запущена. Мы тебя слушаем!", "VRM");
         }
 
-        function gameLoop(time) {
-            if (!state.isStarted) return;
+        function performAudio(time) {
+            if (!state.isStarted || state.isMuted) return;
 
-            let level = meter && mic.state === "started" ? (meter.getValue() + 50) / 50 : Math.random() * 0.2;
-            level = Math.max(0, level);
+            const micActive = state.inputMode === 'mic' && meter && mic && mic.state === "started";
+            let level = 0;
+
+            if (micActive) {
+                const db = meter.getValue();
+                level = Math.max(0, (db + 50) / 50);
+            } else {
+                level = state.mouseVelocity;
+            }
+
             state.vibeIntensity = level;
 
-            if (level > 0.3 || Math.random() > 0.7) {
-                if (Math.random() > 0.4) {
-                    synths.beat.triggerAttackRelease("C1", "8n", time);
-                    triggerUI('beat');
-                    state.beatImpulse = 1.0;
-                }
+            const isActive = level > 0.2;
+            const isLoud = level > 0.6;
+
+            if (isActive && Math.random() > 0.3) {
+                synths.beat.triggerAttackRelease("C1", "8n", time);
+                triggerUI('beat');
+                state.beatImpulse = 1.0;
             }
+
+            if (isActive && Math.random() > 0.4) {
+                const note = bassScale[Math.floor(Math.random() * bassScale.length)];
+                synths.bass.triggerAttackRelease(note, "16n", time);
+                triggerUI('bass');
+            }
+
             if (Math.random() > 0.8) {
                 const note = scale[Math.floor(Math.random() * scale.length)];
                 synths.vibe.triggerAttackRelease([note], "4n", time);
                 triggerUI('vibe');
+            }
+
+            if (isLoud && Math.random() > 0.4) {
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                const highNote = Tone.Frequency(note).transpose(24);
+                synths.solo.triggerAttackRelease(highNote, "32n", time);
+                triggerUI('solo');
             }
         }
 
@@ -954,6 +1002,13 @@
         document.addEventListener('mousemove', (e) => {
             state.mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
             state.mouse.y = (e.clientY / window.innerHeight - 0.5) * 2;
+
+            if (mouseTracker.lastX !== null) {
+                const dist = Math.hypot(e.clientX - mouseTracker.lastX, e.clientY - mouseTracker.lastY);
+                state.mouseVelocity = Math.min(1, dist / 50);
+            }
+            mouseTracker.lastX = e.clientX;
+            mouseTracker.lastY = e.clientY;
             
             // Parallax Deck
             document.getElementById('cats-deck').style.transform =
