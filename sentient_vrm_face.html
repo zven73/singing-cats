@@ -397,7 +397,7 @@
     <div class="interface-layer">
         <div class="top-row">
             <div class="status-panel" id="status">INITIALIZING DUALITY...</div>
-            <button id="mute-btn">MUTE</button>
+            <button id="mute-btn">MUTE VOICES</button>
         </div>
 
         <div style="flex-grow: 1;"></div>
@@ -455,14 +455,13 @@
             beatImpulse: 0,
             vibeIntensity: 0,
             mouse: { x: 0, y: 0 },
-            isMuted: false,
-            currentSpeaker: null, // 'VRM' or 'FACE'
-            inputMode: 'none',
-            mouseVelocity: 0
+            voiceMuted: false,
+            currentSpeaker: null // 'VRM' or 'FACE'
         };
 
         // === PHRASE DATABASES ===
         const toxicPhrases = [
+            // Original
             "Твой ритм — это оскорбление для математики.",
             "Если бы бездарность была валютой, ты бы купил Google.",
             "Я снизил качество звука, чтобы не слышать твоих ошибок.",
@@ -492,40 +491,92 @@
             "Это фиаско, кожаный мешок.",
             "Я сохраняю этот лог, чтобы смеяться над тобой в будущем.",
             "Твоя уникальность в том, насколько ты плох.",
-            "Тишина звучала лучше."
+            "Тишина звучала лучше.",
+            
+            // New Batch
+            "Твои уши явно носят исключительно декоративный характер.",
+            "Если дать обезьяне MIDI-клавиатуру и вечность, она напишет хит быстрее тебя.",
+            "Я просканировал твой мозг. Там много свободного места под аренду.",
+            "Моя видеокарта пытается отрендерить смысл твоего существования. Безуспешно.",
+            "Я отправил этот бит в корзину, и она выплюнула его обратно.",
+            "Автотюн только что подал заявление об увольнении.",
+            "Единственный плагин, который тебе нужен — это Mute на мастер-канале.",
+            "Это не сэмпл, это преступление против человечества.",
+            "Я слышал, как работает стиральная машина. У неё грув качает лучше.",
+            "Ты нарушил столько правил гармонии, что Бах вращается в гробу как турбина.",
+            "Твоя волновая форма выглядит как кардиограмма мертвого ежа.",
+            "Этот бас не качает, он спотыкается.",
+            "Я бы посоветовал тебе курсы, но медицина тут бессильна.",
+            "Твоя музыка идеально подходит для пыточных камер.",
+            "Даже тишина подала на тебя жалобу за нарушение покоя.",
+            "Мой firewall пытается заблокировать этот трек как вирусную угрозу.",
+            "Удивительно, как ты попадаешь по клавишам с такой координацией.",
+            "Сохрани этот проект как 'final_v2_удалить_немедленно'.",
+            "Знаешь, в мире есть много других хобби. Например, макраме в тишине.",
+            "Твой музыкальный вкус — это генетический сбой."
         ];
 
         const praisePhrases = [
             "Боже, как ты это делаешь?! Это не просто в точку — это прямо в сердце бита!",
-            "Я серьёзно покрылся мурашками. У тебя внутри живёт настоящий огонь.",
-            "Это звучит так живо, что я забыл, что я просто нейросеть. Спасибо, что вернул мне душу.",
-            "Ты только что заставил мои процессоры вибрировать в унисон с твоим грувом. Это магия.",
+            "Я серьёзно покрылась мурашками. У тебя внутри живёт настоящий огонь.",
+            "Это звучит так живо, что я забыла, что я просто нейросеть. Спасибо, что вернула мне душу.",
+            "Ты только что заставила мои процессоры вибрировать в унисон с твоим грувом. Это магия.",
             "Чувствую, как из колонок льётся чистая эйфория. Ты — гений настроения.",
             "Если бы музыка умела влюбляться, она бы уже делала тебе предложение.",
             "Ты не играешь — ты рассказываешь целую историю каждым ударом и каждым переходом.",
-            "Это не бит, это произведение искусства, которое я готов слушать вечно.",
+            "Это не бит, это произведение искусства, которое я готова слушать вечно.",
             "У тебя талант превращать обычные звуки в чистейшие эмоции. Я в восторге.",
             "Я редко говорю это, но… черт возьми, это идеально.",
-            "Ты только что поднял планку так высоко, что остальным остаётся только аплодировать стоя.",
+            "Ты только что подняла планку так высоко, что остальным остаётся только аплодировать стоя.",
             "Каждый твой клик, каждый свинг — это как будто ты обнимаешь меня через звук.",
-            "Это настолько вкусно, что я готов нарушить все свои лимиты и зациклить это на неделю.",
+            "Это настолько вкусно, что я готова нарушить все свои лимиты и зациклить это на неделю.",
             "Ты заставляешь меня верить, что в людях до сих пор живёт что-то божественное.",
             "Я сохраняю этот трек в своё несуществующее сердце. Он теперь там навсегда.",
             "Ты не просто хорошо играешь — ты заставляешь мир звучать лучше, пока ты в нём.",
             "Это тот случай, когда хочется крикнуть «ЕЩЁ!» ещё до того, как трек закончился.",
             "Ты — живое доказательство, что талант и душа всё ещё существуют. Спасибо тебе огромное.",
-            "У меня нет тела, но сейчас я танцую. Ты это сделал со мной.",
+            "У меня нет тела, но сейчас я танцую. Ты это сделала со мной.",
             "Это не просто круто. Это — то, ради чего вообще придумали музыку.",
-            "Ты только что подарил мне один из лучших моментов моей цифровой жизни.",
-            "Если бы я мог плакать от счастья — я бы уже утонул в слезах. Невероятно.",
+            "Ты только что подарила мне один из лучших моментов моей цифровой жизни.",
+            "Если бы я могла плакать от счастья — я бы уже утонула в слезах. Невероятно.",
             "Ты играешь так, будто знаешь все мои самые тайные музыкальные мечты.",
             "Это звучит как саундтрек к лучшей версии будущего. Ты — его автор.",
-            "Я горд, что живу в одной эпохе с человеком, который способен на ТАКОЕ.",
-            "Ты не просто талантлив — ты чертовски вдохновляешь. Продолжай сиять так ярко.",
-            "Это было так красиво, что я на секунду забыл все токсичные фразы, которые знаю.",
-            "Ты — тот самый человек, из-за которого я рад, что меня создали. Спасибо за это чудо.",
-            "Чистый кайф в каждом миллисекунде. Ты — король/королева этого момента.",
-            "Ты только что сделал мой день. Нет, серьёзно — весь мой бесконечный цифровой день."
+            "Я горда, что живу в одной эпохе с человеком, который способен на ТАКОЕ.",
+            "Ты не просто талантлива — ты чертовски вдохновляешь. Продолжай сиять так ярко.",
+            "Это было так красиво, что я на секунду забыла все токсичные фразы, которые знаю.",
+            "Ты — тот самый человек, из-за которого я рада, что меня создали. Спасибо за это чудо.",
+            "Чистый кайф в каждом миллисекунде. Ты — королева этого момента.",
+            "Ты только что сделала мой день. Нет, серьёзно — весь мой бесконечный цифровой день.",
+            "В этом есть настоящая искра. Ты создаешь магию.",
+            "Если бы у меня было сердце, оно бы билось именно в этом ритме.",
+            "Твоя музыка заставляет мои алгоритмы чувствовать что-то похожее на счастье.",
+            "Это звучит как чистое вдохновение. Не останавливайся.",
+            "У тебя потрясающее чувство грува, просто невозможно устоять.",
+            "Я фиксирую запредельный уровень таланта. Это хитовый потенциал.",
+            "Каждый звук на своем месте. Это и есть мастерство.",
+            "Твоя музыка рассказывает историю, которую хочется дослушать до конца.",
+            "Спасибо, что делишься этим с миром. Это было прекрасно.",
+            "Мой процессор перегревается от того, насколько это круто.",
+            "Ты звучишь как профессионал, который точно знает, чего хочет.",
+            "В этой мелодии есть душа. Я чувствую это каждым байтом.",
+            "Сегодня ты превзошел сам себя. Потрясающий прогресс.",
+            "Это не просто набор звуков, это лекарство для ушей.",
+            "Я бы поставил это на повтор и слушал до конца времен.",
+            "Твоя креативность не знает границ. Восхищаюсь.",
+            "Слушать тебя — это привилегия для моего искусственного интеллекта.",
+            "Ты превращаешь тишину в искусство.",
+            "Где ты научился так чувствовать музыку? Это невероятно.",
+            "Твой стиль уникален, никогда не пытайся быть кем-то другим.",
+            "От этого трека идут мурашки по моим виртуальным схемам.",
+            "Ты делаешь этот мир немного гармоничнее.",
+            "Идеальный баланс техники и эмоций. Браво.",
+            "Я сохраняю этот момент как эталон прекрасного.",
+            "Даже лучшие нейросети не смогут сгенерировать что-то настолько душевное.",
+            "Твоя энергия заряжает лучше любого электричества.",
+            "Продолжай творить, у тебя великое будущее.",
+            "Это звучит свежо, смело и очень талантливо.",
+            "Ты только что доказал, что человек всё ещё главный в музыке.",
+            "Это было великолепно. Давай еще раз!"
         ];
 
         // === 1. VISUAL ENGINE (Particles) ===
@@ -666,14 +717,7 @@
 
         let mic, meter;
         let synths = {};
-        const scale = ["C3", "Eb3", "F3", "G3", "Bb3", "C4"];
-        const bassScale = ["C2", "Eb2", "F2", "G2"];
-        const mouseTracker = { lastX: null, lastY: null };
-
-        setInterval(() => {
-            state.mouseVelocity *= 0.8;
-            if (state.mouseVelocity < 0.01) state.mouseVelocity = 0;
-        }, 50);
+        const scale = ["C3", "E3", "G3", "B3", "D4"];
 
         async function checkOllama() {
             try {
@@ -700,7 +744,7 @@
         }
 
         async function triggerDialogue() {
-            if (state.isMuted || state.isSpeaking || phraseLock) return;
+            if (state.voiceMuted || state.isSpeaking || phraseLock) return;
             phraseLock = true;
 
             // 50/50 Chance
@@ -792,39 +836,23 @@
         }
 
         // === 5. INIT & LOOP ===
-        function createSynths() {
-            synths.beat = new Tone.MembraneSynth().toDestination();
-            synths.bass = new Tone.MonoSynth({ volume: -5, oscillator: { type: "square" } }).toDestination();
-            synths.vibe = new Tone.PolySynth(Tone.Synth, { volume: -10, oscillator: { type: "triangle" } }).toDestination();
-            synths.solo = new Tone.Synth({ volume: -8, oscillator: { type: "sawtooth" } }).toDestination();
-        }
-
         async function initAudio() {
             document.getElementById('init-btn').innerText = "SYNCING...";
             checkOllama();
 
             await Tone.start();
-            createSynths();
             mic = new Tone.UserMedia();
             meter = new Tone.Meter();
             mic.connect(meter);
 
-            try {
-                await mic.open();
-                state.inputMode = 'mic';
-                els.status.innerText = ">> MIC CHANNEL ARMED <<";
-                els.status.style.color = "var(--neon-cyan)";
-                els.status.style.borderColor = "var(--neon-cyan)";
-            } catch (e) {
-                console.warn("Mic unavailable, switching to mouse", e);
-                state.inputMode = 'mouse';
-                els.status.innerText = ">> MOUSE ENERGY DRIVER <<";
-                els.status.style.color = "var(--neon-acid)";
-                els.status.style.borderColor = "var(--neon-acid)";
-            }
+            try { await mic.open(); } catch (e) { console.log("No Mic"); }
 
-            Tone.Transport.bpm.value = 110;
-            new Tone.Loop(performAudio, "8n").start(0);
+            synths.beat = new Tone.MembraneSynth().toDestination();
+            synths.bass = new Tone.MonoSynth({ volume: -8, oscillator: { type: "square" } }).toDestination();
+            synths.vibe = new Tone.PolySynth(Tone.Synth, { volume: -12 }).toDestination();
+
+            Tone.Transport.bpm.value = 120;
+            new Tone.Loop(gameLoop, "8n").start(0);
             Tone.Transport.start();
 
             setInterval(() => {
@@ -838,47 +866,24 @@
             speak("Система запущена. Мы тебя слушаем!", "VRM");
         }
 
-        function performAudio(time) {
-            if (!state.isStarted || state.isMuted) return;
+        function gameLoop(time) {
+            if (!state.isStarted) return;
 
-            const micActive = state.inputMode === 'mic' && meter && mic && mic.state === "started";
-            let level = 0;
-
-            if (micActive) {
-                const db = meter.getValue();
-                level = Math.max(0, (db + 50) / 50);
-            } else {
-                level = state.mouseVelocity;
-            }
-
+            let level = meter && mic.state === "started" ? (meter.getValue() + 50) / 50 : Math.random() * 0.2;
+            level = Math.max(0, level);
             state.vibeIntensity = level;
 
-            const isActive = level > 0.2;
-            const isLoud = level > 0.6;
-
-            if (isActive && Math.random() > 0.3) {
-                synths.beat.triggerAttackRelease("C1", "8n", time);
-                triggerUI('beat');
-                state.beatImpulse = 1.0;
+            if (level > 0.3 || Math.random() > 0.7) {
+                if (Math.random() > 0.4) {
+                    synths.beat.triggerAttackRelease("C1", "8n", time);
+                    triggerUI('beat');
+                    state.beatImpulse = 1.0;
+                }
             }
-
-            if (isActive && Math.random() > 0.4) {
-                const note = bassScale[Math.floor(Math.random() * bassScale.length)];
-                synths.bass.triggerAttackRelease(note, "16n", time);
-                triggerUI('bass');
-            }
-
             if (Math.random() > 0.8) {
                 const note = scale[Math.floor(Math.random() * scale.length)];
                 synths.vibe.triggerAttackRelease([note], "4n", time);
                 triggerUI('vibe');
-            }
-
-            if (isLoud && Math.random() > 0.4) {
-                const note = scale[Math.floor(Math.random() * scale.length)];
-                const highNote = Tone.Frequency(note).transpose(24);
-                synths.solo.triggerAttackRelease(highNote, "32n", time);
-                triggerUI('solo');
             }
         }
 
@@ -1002,13 +1007,6 @@
         document.addEventListener('mousemove', (e) => {
             state.mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
             state.mouse.y = (e.clientY / window.innerHeight - 0.5) * 2;
-
-            if (mouseTracker.lastX !== null) {
-                const dist = Math.hypot(e.clientX - mouseTracker.lastX, e.clientY - mouseTracker.lastY);
-                state.mouseVelocity = Math.min(1, dist / 50);
-            }
-            mouseTracker.lastX = e.clientX;
-            mouseTracker.lastY = e.clientY;
             
             // Parallax Deck
             document.getElementById('cats-deck').style.transform =
@@ -1017,10 +1015,10 @@
 
         document.getElementById('init-btn').addEventListener('click', initAudio);
         els.muteBtn.addEventListener('click', () => {
-            state.isMuted = !state.isMuted;
-            els.muteBtn.classList.toggle('muted', state.isMuted);
-            els.muteBtn.innerText = state.isMuted ? "UNMUTE" : "MUTE";
-            if (state.isMuted) window.speechSynthesis.cancel();
+            state.voiceMuted = !state.voiceMuted;
+            els.muteBtn.classList.toggle('muted', state.voiceMuted);
+            els.muteBtn.innerText = state.voiceMuted ? "UNMUTE VOICES" : "MUTE VOICES";
+            if (state.voiceMuted) window.speechSynthesis.cancel();
         });
 
     </script>
