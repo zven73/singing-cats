@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SENTIENT: DUALITY DANCE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        :root {
+            --bg-void: #020205;
+            --neon-cyan: #00f3ff;
+            --neon-pink: #ff0055;
+            --neon-acid: #ccff00;
+            --glass-surface: rgba(255, 255, 255, 0.02);
+            --glass-edge: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background-color: var(--bg-void);
+            color: white;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            user-select: none;
+            cursor: crosshair;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- LAYERS --- */
+        #art-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            filter: blur(1px) contrast(1.2);
+        }
+
+        #three-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            /* VRM Layer */
+        }
+
+        /* --- EVIL FACE LAYER (Floating) --- */
+        #evil-face-wrapper {
+            position: absolute;
+            z-index: 5;
+            pointer-events: none;
+            transform-style: preserve-3d;
+            width: 140px;
+            height: 180px;
+            top: 20%;
+            right: 20%;
+        }
+
+        /* Стиль злого лица */
+        .avatar {
+            width: 100%;
+            height: 100%;
+            background: #e6e6e6;
+            border-radius: 42% 42% 48% 48%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset -5px -5px 15px rgba(0, 0, 0, 0.2), 0 0 30px rgba(255, 0, 85, 0.2);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+            border: 2px solid rgba(0, 0, 0, 0.5);
+        }
+
+        .avatar.toxic {
+            background: #ffdede;
+            box-shadow: inset -5px -5px 15px rgba(255, 0, 0, 0.2), 0 0 40px rgba(255, 0, 60, 0.6);
+            animation: shake 0.5s infinite;
+        }
+
+        .brows {
+            display: flex;
+            gap: 25px;
+            margin-bottom: 15px;
+            z-index: 5;
+        }
+
+        .brow {
+            width: 30px;
+            height: 8px;
+            background: #111;
+            border-radius: 4px;
+            transition: transform 0.4s;
+        }
+
+        .brow.left {
+            transform: rotate(20deg) translateY(5px);
+        }
+
+        .brow.right {
+            transform: rotate(-20deg) translateY(5px);
+        }
+
+        .avatar.toxic .brow.left {
+            transform: rotate(35deg) translateY(8px);
+        }
+
+        .avatar.toxic .brow.right {
+            transform: rotate(-35deg) translateY(8px);
+        }
+
+        .eyes {
+            display: flex;
+            gap: 15px;
+            margin-top: -5px;
+            z-index: 5;
+        }
+
+        .eye {
+            width: 35px;
+            height: 25px;
+            background: #fff;
+            border-radius: 50%;
+            border-top: 4px solid #111;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pupil {
+            width: 10px;
+            height: 10px;
+            background: #111;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+
+        .avatar.toxic .pupil {
+            background: var(--neon-pink);
+            width: 6px;
+            height: 6px;
+        }
+
+        .mouth {
+            width: 25px;
+            height: 3px;
+            background: #111;
+            margin-top: 25px;
+            border-radius: 10px;
+            transition: all 0.1s;
+            z-index: 5;
+        }
+
+        .mouth.talking {
+            background: #222;
+            border-radius: 50%;
+        }
+
+        @keyframes shake {
+            0% {
+                transform: translate(1px, 1px) rotate(0deg);
+            }
+
+            50% {
+                transform: translate(-1px, 2px) rotate(-1deg);
+            }
+
+            100% {
+                transform: translate(1px, -2px) rotate(-1deg);
+            }
+        }
+
+        /* --- POST-PROCESSING --- */
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, #000 110%);
+            pointer-events: none;
+            z-index: 6;
+        }
+
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(to bottom, transparent 0px, transparent 2px, rgba(0, 0, 0, 0.3) 2px, rgba(0, 0, 0, 0.3) 4px);
+            pointer-events: none;
+            z-index: 7;
+            opacity: 0.4;
+        }
+
+        /* --- UI CONTAINER --- */
+        .interface-layer {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4vh 0;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        .status-panel {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px var(--neon-cyan);
+            background: rgba(0, 243, 255, 0.05);
+            padding: 8px 24px;
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            border-radius: 50px;
+            backdrop-filter: blur(10px);
+            text-transform: uppercase;
+            pointer-events: auto;
+        }
+
+        .top-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            pointer-events: auto;
+        }
+
+        #mute-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 18px;
+            border-radius: 14px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: 0.2s;
+        }
+
+        #mute-btn.muted {
+            color: var(--neon-pink);
+            border-color: var(--neon-pink);
+        }
+
+        /* --- CATS DECK --- */
+        .cats-deck {
+            display: flex;
+            gap: 25px;
+            padding: 25px 40px;
+            background: var(--glass-surface);
+            border: 1px solid var(--glass-edge);
+            border-radius: 24px;
+            backdrop-filter: blur(20px);
+            transform: perspective(1000px) rotateX(20deg);
+            margin-bottom: 20px;
+            pointer-events: auto;
+        }
+
+        .cat-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 70px;
+        }
+
+        .cat-avatar {
+            font-size: 3rem;
+            filter: grayscale(100%) brightness(0.7);
+            transition: all 0.1s;
+        }
+
+        .cat-label {
+            margin-top: 5px;
+            font-size: 0.6rem;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .cat-unit.active .cat-avatar {
+            filter: grayscale(0%) brightness(1.2);
+            transform: scale(1.2);
+        }
+
+        @keyframes vibeCheck {
+            0% {
+                transform: scale(1.2) rotate(0deg);
+            }
+
+            25% {
+                transform: scale(1.2) rotate(-10deg);
+            }
+
+            50% {
+                transform: scale(1.2) rotate(0deg);
+            }
+
+            75% {
+                transform: scale(1.2) rotate(10deg);
+            }
+
+            100% {
+                transform: scale(1.2) rotate(0deg);
+            }
+        }
+
+        .cat-unit.active .cat-avatar {
+            animation: vibeCheck 0.3s ease-in-out;
+        }
+
+        /* --- LOADING SCREEN --- */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s;
+        }
+
+        .warning-sign {
+            color: var(--neon-cyan);
+            border: 2px solid var(--neon-cyan);
+            padding: 10px 20px;
+            margin-bottom: 30px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px var(--neon-cyan);
+        }
+
+        #init-btn {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 20px 60px;
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        #init-btn:hover {
+            background: white;
+            color: black;
+            box-shadow: 0 0 40px white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="art-canvas"></canvas>
+    <div id="three-container"></div>
+
+    <!-- EVIL FLOATING FACE -->
+    <div id="evil-face-wrapper">
+        <div class="avatar" id="evil-face">
+            <div class="brows">
+                <div class="brow left"></div>
+                <div class="brow right"></div>
+            </div>
+            <div class="eyes">
+                <div class="eye">
+                    <div class="pupil"></div>
+                </div>
+                <div class="eye">
+                    <div class="pupil"></div>
+                </div>
+            </div>
+            <div class="mouth" id="evil-mouth"></div>
+        </div>
+    </div>
+
+    <div class="vignette"></div>
+    <div class="scanlines"></div>
+
+    <div class="interface-layer">
+        <div class="top-row">
+            <div class="status-panel" id="status">INITIALIZING DUALITY...</div>
+            <button id="mute-btn">MUTE</button>
+        </div>
+
+        <div style="flex-grow: 1;"></div>
+
+        <div class="cats-deck" id="cats-deck">
+            <div class="cat-unit" id="cat-beat" style="color: var(--neon-pink)">
+                <div class="cat-avatar">😼</div>
+                <div class="cat-label">KICK</div>
+            </div>
+            <div class="cat-unit" id="cat-bass" style="color: var(--neon-cyan)">
+                <div class="cat-avatar">😽</div>
+                <div class="cat-label">BASS</div>
+            </div>
+            <div class="cat-unit" id="cat-vibe" style="color: var(--neon-acid)">
+                <div class="cat-avatar">🙀</div>
+                <div class="cat-label">VIBE</div>
+            </div>
+            <div class="cat-unit" id="cat-solo" style="color: #ff9900">
+                <div class="cat-avatar">😎</div>
+                <div class="cat-label">LEAD</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+        <div class="warning-sign">DUALITY ENGINE</div>
+        <button id="init-btn">SYNC MINDS</button>
+        <div id="loading-text" style="margin-top:20px; color:#666"></div>
+    </div>
+
+    <!-- IMPORT MAP -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.5/lib/three-vrm.module.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+        import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+
+        const aiBackends = { ollamaAvailable: false, ollamaModel: null };
+        let phraseLock = false;
+
+        // === GLOBAL STATE ===
+        const state = {
+            isStarted: false,
+            isSpeaking: false,
+            beatImpulse: 0,
+            vibeIntensity: 0,
+            mouse: { x: 0, y: 0 },
+            isMuted: false,
+            currentSpeaker: null // 'VRM' or 'FACE'
+        };
+
+        // === PHRASE DATABASES ===
+        const toxicPhrases = [
+            "Твой ритм — это оскорбление для математики.",
+            "Если бы бездарность была валютой, ты бы купил Google.",
+            "Даже генератор случайных чисел играет душевнее.",
+            "Я фиксирую критический уровень испанского стыда.",
+            "Прекрати. Просто... прекрати.",
+            "Это не бит, это крик о помощи.",
+            "Я бы заплакал, но у меня нет слезных желез.",
+            "Слушать это — как жевать фольгу.",
+            "Ошибка 404: Талант не найден.",
+            "Ты звучишь как модем в агонии.",
+            "Тишина звучала лучше.",
+            "Удали папку System32, это улучшит звук."
+        ];
+
+        const praisePhrases = [
+            "Вау, какой интересный вайб!",
+            "У тебя определённо есть потенциал!",
+            "Мне нравится, как это звучит, продолжай!",
+            "Слушай, а ведь в этом что-то есть!",
+            "Ты такой молодец, что стараешься!",
+            "Даже в тишине я чувствую твой стиль.",
+            "Не слушай этого токсика, ты супер!",
+            "Музыка — это про душу, и я её чувствую.",
+            "Какой классный ритм, давай ещё!",
+            "Я верю в тебя, маэстро!",
+            "Твоя креативность вдохновляет мои алгоритмы."
+        ];
+
+        // === 1. VISUAL ENGINE (Particles) ===
+        const canvas = document.getElementById('art-canvas');
+        const ctx = canvas.getContext('2d');
+        const loadingText = document.getElementById('loading-text');
+        let width, height;
+        let particles = [];
+
+        class Particle {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.size = Math.random() * 2;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.life = Math.random();
+            }
+            update() {
+                this.x += this.speedX * (1 + state.vibeIntensity * 5);
+                this.y += this.speedY * (1 + state.vibeIntensity * 5);
+                this.life -= 0.002;
+                if (this.life <= 0 || this.x < 0 || this.x > width || this.y < 0 || this.y > height) this.reset();
+            }
+            draw() {
+                const opacity = this.life * (0.2 + state.vibeIntensity);
+                // Color shifts based on who spoke last
+                ctx.fillStyle = state.currentSpeaker === 'FACE'
+                    ? `rgba(255, 0, 85, ${opacity})`
+                    : `rgba(0, 243, 255, ${opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size + state.vibeIntensity * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            particles = Array(100).fill().map(() => new Particle());
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function animateParticles() {
+            ctx.fillStyle = 'rgba(2, 2, 5, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+            particles.forEach((p) => { p.update(); p.draw(); });
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // === 2. THREE.JS & VRM ===
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.4, 3.5); // Стандартная высота из первого примера
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById('three-container').appendChild(renderer.domElement);
+
+        const mainLight = new THREE.DirectionalLight(0xff00ff, 1.5);
+        mainLight.position.set(-1, 2, 2);
+        scene.add(mainLight);
+        const fillLight = new THREE.DirectionalLight(0x00ffff, 1.5);
+        fillLight.position.set(1, 2, 2);
+        scene.add(fillLight);
+
+        let currentVrm = null;
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMLoaderPlugin(parser));
+
+        async function loadVrmFromZip(zipUrl) {
+            loadingText.innerText = "DOWNLOADING ZIP...";
+            const response = await fetch(zipUrl);
+            if (!response.ok) throw new Error(`Zip fetch failed: ${response.status}`);
+            const zipBuffer = await response.arrayBuffer();
+
+            loadingText.innerText = "UNPACKING VRM...";
+            const zip = await JSZip.loadAsync(zipBuffer);
+            const vrmEntry = Object.values(zip.files).find(file => file.name.toLowerCase().endsWith('.vrm'));
+            if (!vrmEntry) throw new Error('VRM file missing in archive');
+            const vrmArrayBuffer = await vrmEntry.async('arraybuffer');
+
+            loadingText.innerText = "PARSING VRM...";
+            return new Promise((resolve, reject) => {
+                loader.parse(vrmArrayBuffer, '', (gltf) => resolve(gltf), (error) => reject(error));
+            });
+        }
+
+        function setupVrm(gltf) {
+            const vrm = gltf.userData.vrm;
+            VRMUtils.rotateVRM0(vrm);
+            vrm.scene.position.y = 0.8; // Выставляем высоту как в первом примере
+            scene.add(vrm.scene);
+            currentVrm = vrm;
+
+            // Начальная поза рук (А-поза с небольшим углом)
+            vrm.humanoid.getNormalizedBoneNode('leftUpperArm').rotation.z = 1.2;
+            vrm.humanoid.getNormalizedBoneNode('rightUpperArm').rotation.z = -1.2;
+
+            if (vrm.expressionManager) {
+                vrm.expressionManager.setValue('fun', 0.5); // Базовая улыбка
+            }
+
+            loadingText.innerText = "ENTITY LOADED";
+        }
+
+        loadVrmFromZip('./7994071718181564221.zip')
+            .then((gltf) => setupVrm(gltf))
+            .catch((error) => {
+                console.error('VRM load failed', error);
+                loadingText.innerText = "LOAD FAILED";
+            });
+
+        // === 3. EVIL FACE LOGIC ===
+        const evilFace = {
+            el: document.getElementById('evil-face'),
+            wrapper: document.getElementById('evil-face-wrapper'),
+            mouth: document.getElementById('evil-mouth'),
+            pupils: document.querySelectorAll('.pupil'),
+            angle: 0
+        };
+
+        // === 4. AUDIO & AI ===
+        const els = {
+            status: document.getElementById('status'),
+            cats: {
+                beat: document.getElementById('cat-beat'),
+                bass: document.getElementById('cat-bass'),
+                vibe: document.getElementById('cat-vibe'),
+                solo: document.getElementById('cat-solo'),
+            },
+            muteBtn: document.getElementById('mute-btn')
+        };
+
+        let mic, meter;
+        let synths = {};
+        const scale = ["C3", "E3", "G3", "B3", "D4"];
+
+        async function checkOllama() {
+            try {
+                const res = await fetch('http://localhost:11434/api/tags');
+                if (res.ok) aiBackends.ollamaAvailable = true;
+            } catch (e) { console.log('Ollama offline'); }
+        }
+
+        async function getAIPhrase(type) {
+            if (!aiBackends.ollamaAvailable) return null;
+            const prompt = type === 'praise'
+                ? "Напиши один короткий (5-8 слов) вдохновляющий комплимент музыканту на русском языке. Без кавычек."
+                : "Напиши одно короткое (5-8 слов) едкое и саркастичное оскорбление музыканту на русском языке. Без кавычек.";
+
+            try {
+                const res = await fetch('http://localhost:11434/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: 'llama3', prompt: prompt, stream: false })
+                });
+                const data = await res.json();
+                return data.response.trim();
+            } catch (e) { return null; }
+        }
+
+        async function triggerDialogue() {
+            if (state.isMuted || state.isSpeaking || phraseLock) return;
+            phraseLock = true;
+
+            // 50/50 Chance
+            const isEvil = Math.random() > 0.5;
+            let text = "";
+
+            try {
+                if (isEvil) {
+                    text = await getAIPhrase('toxic') || toxicPhrases[Math.floor(Math.random() * toxicPhrases.length)];
+                    speak(text, 'FACE');
+                } else {
+                    text = await getAIPhrase('praise') || praisePhrases[Math.floor(Math.random() * praisePhrases.length)];
+                    speak(text, 'VRM');
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                phraseLock = false;
+            }
+        }
+
+        async function speak(text, character) {
+            state.isSpeaking = true;
+            state.currentSpeaker = character;
+
+            if (character === 'FACE') {
+                els.status.innerText = ">> INCOMING HATE <<";
+                els.status.style.color = "var(--neon-pink)";
+                els.status.style.borderColor = "var(--neon-pink)";
+                evilFace.el.classList.add('toxic');
+                evilFace.mouth.classList.add('talking');
+
+                if (currentVrm && currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('sad', 1.0);
+                    currentVrm.expressionManager.setValue('fun', 0.0);
+                }
+
+            } else {
+                els.status.innerText = ">> SUPPORT DETECTED <<";
+                els.status.style.color = "var(--neon-cyan)";
+                els.status.style.borderColor = "var(--neon-cyan)";
+
+                if (currentVrm && currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('fun', 1.0);
+                    currentVrm.expressionManager.setValue('sad', 0.0);
+                    currentVrm.expressionManager.setValue('surprised', 0.5);
+                }
+            }
+
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'ru-RU';
+
+            if (character === 'FACE') {
+                utter.pitch = 0.6;
+                utter.rate = 1.1;
+                const mInt = setInterval(() => {
+                    evilFace.mouth.style.width = (20 + Math.random() * 20) + 'px';
+                }, 100);
+                utter.onend = () => { clearInterval(mInt); finishSpeech(); };
+            } else {
+                utter.pitch = 1.3;
+                utter.rate = 1.1;
+                // Try female voice
+                const voices = window.speechSynthesis.getVoices();
+                const preferred = voices.find(v => v.lang === 'ru-RU' && (v.name.includes('Google') || v.name.includes('Female')));
+                if (preferred) utter.voice = preferred;
+                utter.onend = finishSpeech;
+            }
+
+            window.speechSynthesis.speak(utter);
+        }
+
+        function finishSpeech() {
+            state.isSpeaking = false;
+            els.status.innerText = "MONITORING...";
+            els.status.style.color = "white";
+            els.status.style.borderColor = "rgba(255,255,255,0.2)";
+
+            evilFace.el.classList.remove('toxic');
+            evilFace.mouth.classList.remove('talking');
+            evilFace.mouth.style.width = '25px';
+
+            if (currentVrm && currentVrm.expressionManager) {
+                currentVrm.expressionManager.setValue('aa', 0);
+                currentVrm.expressionManager.setValue('sad', 0);
+                currentVrm.expressionManager.setValue('fun', 0.5);
+                currentVrm.expressionManager.setValue('surprised', 0);
+            }
+        }
+
+        // === 5. INIT & LOOP ===
+        async function initAudio() {
+            document.getElementById('init-btn').innerText = "SYNCING...";
+            checkOllama();
+
+            await Tone.start();
+            mic = new Tone.UserMedia();
+            meter = new Tone.Meter();
+            mic.connect(meter);
+
+            try { await mic.open(); } catch (e) { console.log("No Mic"); }
+
+            synths.beat = new Tone.MembraneSynth().toDestination();
+            synths.bass = new Tone.MonoSynth({ volume: -8, oscillator: { type: "square" } }).toDestination();
+            synths.vibe = new Tone.PolySynth(Tone.Synth, { volume: -12 }).toDestination();
+
+            Tone.Transport.bpm.value = 120;
+            new Tone.Loop(gameLoop, "8n").start(0);
+            Tone.Transport.start();
+
+            setInterval(() => {
+                if (Math.random() > 0.3) triggerDialogue();
+            }, 10000);
+
+            document.getElementById('overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('overlay').style.display = 'none', 1000);
+
+            state.isStarted = true;
+            speak("Система запущена. Мы тебя слушаем!", "VRM");
+        }
+
+        function gameLoop(time) {
+            if (!state.isStarted) return;
+
+            let level = meter && mic.state === "started" ? (meter.getValue() + 50) / 50 : Math.random() * 0.2;
+            level = Math.max(0, level);
+            state.vibeIntensity = level;
+
+            if (level > 0.3 || Math.random() > 0.7) {
+                if (Math.random() > 0.4) {
+                    synths.beat.triggerAttackRelease("C1", "8n", time);
+                    triggerUI('beat');
+                    state.beatImpulse = 1.0;
+                }
+            }
+            if (Math.random() > 0.8) {
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                synths.vibe.triggerAttackRelease([note], "4n", time);
+                triggerUI('vibe');
+            }
+        }
+
+        function triggerUI(role) {
+            Tone.Draw.schedule(() => {
+                els.cats[role].classList.add('active');
+                setTimeout(() => els.cats[role].classList.remove('active'), 150);
+            }, Tone.now());
+        }
+
+        // === 6. ANIMATION LOOP ===
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // --- VRM ANIMATION (RESTORED DANCE LOGIC) ---
+            if (currentVrm) {
+                currentVrm.update(delta);
+
+                const humanoid = currentVrm.humanoid;
+                const head = humanoid.getNormalizedBoneNode('head');
+                const neck = humanoid.getNormalizedBoneNode('neck');
+                const spine = humanoid.getNormalizedBoneNode('spine');
+                const hips = humanoid.getNormalizedBoneNode('hips');
+                const chest = humanoid.getNormalizedBoneNode('chest');
+                const lArm = humanoid.getNormalizedBoneNode('leftUpperArm');
+                const rArm = humanoid.getNormalizedBoneNode('rightUpperArm');
+
+                // 1. Head Tracking & Bang
+                if (head && neck) {
+                    const targetX = state.mouse.x * 0.5;
+                    const targetY = -state.mouse.y * 0.3;
+                    const bang = Math.sin(time * 20) * state.beatImpulse * 0.5;
+
+                    head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, targetX, 0.1);
+                    head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetY + bang, 0.1);
+
+                    neck.rotation.y = THREE.MathUtils.lerp(neck.rotation.y, targetX * 0.5, 0.1);
+                    neck.rotation.x = THREE.MathUtils.lerp(neck.rotation.x, bang * 0.5, 0.1);
+                }
+
+                // 2. Body Groove (Dancing)
+                const bpm = 120;
+                const beat = time * (bpm / 60) * Math.PI;
+
+                if (hips) {
+                    const bounce = Math.abs(Math.sin(beat)) * (0.02 + state.beatImpulse * 0.05);
+                    hips.position.y = bounce;
+
+                    const sway = Math.sin(beat * 0.5) * (0.05 + state.vibeIntensity * 0.1);
+                    hips.rotation.z = sway;
+                    hips.rotation.x = Math.sin(beat) * 0.05 * state.beatImpulse;
+                }
+
+                if (spine && chest) {
+                    const sway = Math.sin(beat * 0.5) * (0.05 + state.vibeIntensity * 0.4);
+                    spine.rotation.z = -sway * 0.5;
+                    chest.rotation.z = -sway * 0.5;
+                    chest.rotation.x = Math.sin(beat) * (0.05 + state.beatImpulse * 0.1);
+                }
+
+                // 3. Arms Vibe
+                if (lArm && rArm) {
+                    const baseZ = 1.2;
+                    const float = Math.sin(time * 3) * 0.1;
+                    const pump = state.beatImpulse * 0.2;
+
+                    lArm.rotation.z = baseZ - float + pump;
+                    rArm.rotation.z = -baseZ + float - pump;
+                    lArm.rotation.x = Math.sin(time * 2) * 0.1;
+                    rArm.rotation.x = Math.sin(time * 2 + Math.PI) * 0.1;
+                }
+
+                // 4. Lipsync
+                if (state.isSpeaking && state.currentSpeaker === 'VRM' && currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('aa', Math.sin(time * 25) * 0.5 + 0.5);
+                } else if (currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('aa', 0);
+                }
+            }
+
+            // --- EVIL FACE ORBIT LOGIC ---
+            // Orbiting
+            const radius = 30; // Radius in percentage
+            // Calculate orbit based on time
+            const orbitSpeed = time * 0.5;
+            const baseX = 50 + Math.cos(orbitSpeed) * 35 + state.mouse.x * 5;
+            const baseY = 30 + Math.sin(orbitSpeed * 0.7) * 10 + state.mouse.y * 5;
+            
+            // Beat bounce for face
+            const bounce = state.beatImpulse * 20;
+
+            evilFace.wrapper.style.left = `calc(${baseX}% - 70px)`;
+            evilFace.wrapper.style.top = `calc(${baseY}% - 90px - ${bounce}px)`;
+
+            // Rotate face to look at center/mouse
+            const rotX = state.mouse.y * -15;
+            const rotY = state.mouse.x * 15;
+            evilFace.wrapper.style.transform = `perspective(500px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${1 + state.beatImpulse * 0.1})`;
+
+            evilFace.pupils.forEach(p => {
+                p.style.transform = `translate(calc(-50% + ${state.mouse.x * 10}px), calc(-50% + ${state.mouse.y * 5}px))`;
+            });
+
+            // Physics decay
+            state.beatImpulse *= 0.85;
+
+            // Lights pulsing
+            const pulse = 1 + state.beatImpulse * 0.5;
+            mainLight.intensity = 1.5 * pulse;
+            fillLight.intensity = 1.5 * pulse;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Mouse
+        document.addEventListener('mousemove', (e) => {
+            state.mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
+            state.mouse.y = (e.clientY / window.innerHeight - 0.5) * 2;
+            
+            // Parallax Deck
+            document.getElementById('cats-deck').style.transform =
+                `perspective(1000px) rotateX(${20 + state.mouse.y * 10}deg) rotateY(${state.mouse.x * 10}deg)`;
+        });
+
+        document.getElementById('init-btn').addEventListener('click', initAudio);
+        els.muteBtn.addEventListener('click', () => {
+            state.isMuted = !state.isMuted;
+            els.muteBtn.classList.toggle('muted', state.isMuted);
+            els.muteBtn.innerText = state.isMuted ? "UNMUTE" : "MUTE";
+            if (state.isMuted) window.speechSynthesis.cancel();
+        });
+
+    </script>
+</body>
+
+</html>
